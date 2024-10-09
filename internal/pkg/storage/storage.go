@@ -6,8 +6,13 @@ import (
 	"go.uber.org/zap"
 )
 
+type Value struct {
+	v string
+	t Type
+}
+
 type Storage struct {
-	inner  map[string]string
+	inner  map[string]Value
 	logger *zap.Logger
 }
 
@@ -21,13 +26,24 @@ func NewStorage() (Storage, error) {
 	logger.Info("created new storage")
 
 	return Storage{
-		inner:  make(map[string]string),
+		inner:  make(map[string]Value),
 		logger: logger,
 	}, nil
 }
 
 func (r Storage) Set(key, value string) {
-	r.inner[key] = value
+	switch kind := getType(value); kind {
+	case TypeInt:
+		r.inner[key] = Value{v: value, t: kind}
+	case TypeString:
+		r.inner[key] = Value{v: value, t: kind}
+	case TypeUndefined:
+		r.logger.Error(
+			"undefined value type",
+			zap.String("key", key),
+			zap.Any("value", value),
+		)
+	}
 }
 
 func (r Storage) Get(key string) *string {
@@ -36,7 +52,32 @@ func (r Storage) Get(key string) *string {
 		return nil
 	}
 
-	return &res
+	return &res.v
+}
+
+type Type string
+
+const (
+	TypeInt       Type = "D"
+	TypeString    Type = "S"
+	TypeUndefined Type = "UN"
+)
+
+func getType(value string) Type {
+	var val any
+
+	val, err := strconv.Atoi(value)
+	if err != nil {
+		val = value
+	}
+	switch val.(type) {
+	case int:
+		return TypeInt
+	case string:
+		return TypeString
+	default:
+		return TypeUndefined
+	}
 }
 
 func (r Storage) GetKind(key string) string {
@@ -44,7 +85,7 @@ func (r Storage) GetKind(key string) string {
 	if !ok {
 		return ""
 	}
-	_, err := strconv.Atoi(k)
+	_, err := strconv.Atoi(k.v)
 	if err != nil {
 		return "S"
 	}
