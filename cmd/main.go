@@ -3,25 +3,31 @@ package main
 import (
 	"fmt"
 	"homework1/internal/pkg/storage"
+	"os"
 )
 
 func main() {
-	s, _ := storage.NewStorage()
+	ls := storage.NewListStorage()
 
-	s.Set("key2", "")
+	// Загрузка состояния с диска
+	if err := ls.LoadFromDisk("db.json"); err != nil && !os.IsNotExist(err) {
+		fmt.Println("Error loading state:", err)
+	}
 
-	res1 := s.Get("key2")
-	res2 := s.Get("key3")
+	// Примеры работы с базой данных
+	ls.RPUSH("mylist", []string{"a", "b", "c"})
+	ls.LSET("mylist", 1, "z")
 
-	fmt.Println(*res1, res2)
+	value, err := ls.LGET("mylist", 1)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("Value at index 1:", value)
+	}
 
-	s1, _ := storage.NewStorage()
-
-	s1.Set("key2", "27")
-
-	res3 := s.GetKind("key2")
-	res4 := s1.GetKind("key2")
-
-	fmt.Println(res3, res4)
+	// Сохранение состояния на диск перед выходом
+	if err := ls.SaveToDisk("db.json"); err != nil {
+		fmt.Println("Error saving state:", err)
+	}
 
 }
