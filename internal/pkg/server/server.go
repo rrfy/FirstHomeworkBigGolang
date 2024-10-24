@@ -14,7 +14,7 @@ type Server struct {
 }
 
 type Entry struct {
-	Value string `json:"value"`
+	Value interface{} `json:"value"`
 }
 
 func New(host string, st *storage.Storage) *Server {
@@ -37,6 +37,7 @@ func (r *Server) newAPI() *gin.Engine {
 		ctx.Status(http.StatusOK)
 	})
 
+	// Маршруты для работы со скалярными значениями
 	engine.PUT("/scalar/set/:key", r.handlerSet)
 	engine.GET("/scalar/get/:key", r.handlerGet)
 
@@ -48,6 +49,7 @@ func (r *Server) handlerSet(ctx *gin.Context) {
 
 	var v Entry
 
+	// Декодируем значение, которое может быть любого типа
 	if err := json.NewDecoder(ctx.Request.Body).Decode(&v); err != nil {
 		ctx.AbortWithStatus(http.StatusBadRequest)
 		return
@@ -61,15 +63,18 @@ func (r *Server) handlerSet(ctx *gin.Context) {
 func (r *Server) handlerGet(ctx *gin.Context) {
 	key := ctx.Param("key")
 
-	v := r.storage.Get(key)
-	if v == nil {
+	// Получаем значение из хранилища
+	value, err := r.storage.Get(key)
+	if err != nil {
 		ctx.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, Entry{Value: *v})
+	// Отправляем значение в JSON-формате
+	ctx.JSON(http.StatusOK, Entry{Value: value})
 }
 
+// Start запускает сервер
 func (r *Server) Start() {
 	r.newAPI().Run(r.host)
 }

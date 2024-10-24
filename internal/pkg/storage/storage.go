@@ -4,21 +4,23 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
-	"strconv"
 
 	"go.uber.org/zap"
 )
 
+// Value хранит значение и его тип
 type Value struct {
-	v string
+	v interface{}
 	t Type
 }
 
+// Storage хранит данные с поддержкой различных типов
 type Storage struct {
 	inner  map[string]Value
 	logger *zap.Logger
 }
 
+// NewStorage создает новое хранилище
 func NewStorage() (Storage, error) {
 	logger, err := zap.NewProduction()
 	if err != nil {
@@ -34,14 +36,13 @@ func NewStorage() (Storage, error) {
 	}, nil
 }
 
-func (r Storage) Set(key, value string) {
+// Set добавляет значение в хранилище. Поддерживаются скалярные типы, списки и словари.
+func (s *Storage) Set(key string, value interface{}) {
 	switch kind := getType(value); kind {
-	case TypeInt:
-		r.inner[key] = Value{v: value, t: kind}
-	case TypeString:
-		r.inner[key] = Value{v: value, t: kind}
-	case TypeUndefined:
-		r.logger.Error(
+	case TypeInt, TypeString, TypeBool, TypeFloat, TypeList, TypeMap:
+		s.inner[key] = Value{v: value, t: kind}
+	default:
+		s.logger.Error(
 			"undefined value type",
 			zap.String("key", key),
 			zap.Any("value", value),
@@ -49,100 +50,106 @@ func (r Storage) Set(key, value string) {
 	}
 }
 
-func (r Storage) Get(key string) *string {
-	res, ok := r.inner[key]
+// Get возвращает значение по ключу, если оно существует
+func (s *Storage) Get(key string) (interface{}, error) {
+	res, ok := s.inner[key]
 	if !ok {
-		return nil
+		return nil, errors.New("key not found")
 	}
+	return res.v, nil
+}
 
-	return &res.v
+// GetKind возвращает тип значения по ключу
+func (s *Storage) GetKind(key string) (Type, error) {
+	v, ok := s.inner[key]
+	if !ok {
+		return "", errors.New("key not found")
+	}
+	return v.t, nil
+}
+
+// SaveToDisk сохраняет данные на диск в формате JSON
+func (s *Storage) SaveToDisk(filename string) error {
+	data, err := json.Marshal(s.inner)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filename, data, 0644)
+}
+
+// LoadFromDisk загружает данные с диска
+func (s *Storage) LoadFromDisk(filename string) error {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &s.inner)
 }
 
 type Type string
 
 const (
-	TypeInt       Type = "D"
-	TypeString    Type = "S"
-	TypeUndefined Type = "UN"
+	TypeInt       Type = "INT"
+	TypeString    Type = "STRING"
+	TypeBool      Type = "BOOL"
+	TypeFloat     Type = "FLOAT"
+	TypeList      Type = "LIST"
+	TypeMap       Type = "MAP"
+	TypeUndefined Type = "UNDEFINED"
 )
 
-func getType(value string) Type {
-	var val any
-
-	val, err := strconv.Atoi(value)
-	if err != nil {
-		val = value
-	}
-	switch val.(type) {
+// getType определяет тип значения
+func getType(value interface{}) Type {
+	switch value.(type) {
 	case int:
 		return TypeInt
 	case string:
 		return TypeString
+	case bool:
+		return TypeBool
+	case float64:
+		return TypeFloat
+	case []interface{}:
+		return TypeList
+	case map[string]interface{}:
+		return TypeMap
 	default:
 		return TypeUndefined
 	}
 }
 
-func (r Storage) GetKind(key string) string {
-	k, ok := r.inner[key]
-	if !ok {
-		return ""
-	}
-	_, err := strconv.Atoi(k.v)
-	if err != nil {
-		return "S"
-	}
-	return "D"
-}
-
+// ListStorage расширяет функционал для работы со списками
 type ListStorage struct {
-	inner map[string][]string
+	inner map[string][]interface{}
 }
 
+// NewListStorage создает хранилище для списков
 func NewListStorage() *ListStorage {
 	return &ListStorage{
-		inner: make(map[string][]string),
+		inner: make(map[string][]interface{}),
 	}
 }
 
-func (ls *ListStorage) LPUSH(key string, values []string) {
+// LPUSH добавляет элементы в начало списка
+func (ls *ListStorage) LPUSH(key string, values []interface{}) {
 	if _, err := ls.inner[key]; !err {
-		ls.inner[key] = []string{}
+		ls.inner[key] = []interface{}{}
 	}
 
 	ls.inner[key] = append(values, ls.inner[key]...)
 }
 
-func (ls *ListStorage) RPUSH(key string, values []string) {
+// RPUSH добавляет элементы в конец списка
+func (ls *ListStorage) RPUSH(key string, values []interface{}) {
 	if _, err := ls.inner[key]; !err {
-		ls.inner[key] = []string{}
+		ls.inner[key] = []interface{}{}
 	}
 
 	ls.inner[key] = append(ls.inner[key], values...)
 }
 
-func (ls *ListStorage) RADDToSet(key string, values []string) {
-	if _, err := ls.inner[key]; !err {
-		ls.inner[key] = []string{}
-	}
-
-	for _, value := range values {
-		if !contains(ls.inner[key], value) {
-			ls.inner[key] = append(ls.inner[key], value)
-		}
-	}
-}
-
-func contains(slice []string, item string) bool {
-	for _, v := range slice {
-		if v == item {
-			return true
-		}
-	}
-	return false
-}
-
-func (ls *ListStorage) LPOP(key string, count ...int) ([]string, error) {
+// LPOP удаляет и возвращает элементы с начала списка
+func (ls *ListStorage) LPOP(key string, count ...int) ([]interface{}, error) {
 	if _, exist := ls.inner[key]; !exist {
 		return nil, errors.New("no such key")
 	}
@@ -156,114 +163,48 @@ func (ls *ListStorage) LPOP(key string, count ...int) ([]string, error) {
 		start, end = 0, 1
 	} else if len(count) == 1 {
 		start, end = 0, count[0]
-	} else if len(count) == 2 {
-		start, end = count[0], count[1]
 	} else {
 		return nil, errors.New("invalid count")
 	}
 
-	if start < 0 {
-		start = len(ls.inner[key]) + start
-	}
-	if end < 0 {
-		end = len(ls.inner[key]) + end + 1
-	}
 	if end > len(ls.inner[key]) {
 		end = len(ls.inner[key])
 	}
 
-	if start > end {
-		return nil, errors.New("invalid range")
-	}
-
 	removed := ls.inner[key][start:end]
-
-	ls.inner[key] = append(ls.inner[key][:start], ls.inner[key][end:]...)
+	ls.inner[key] = ls.inner[key][end:]
 
 	return removed, nil
 }
 
-func (ls *ListStorage) RPOP(key string, count ...int) ([]string, error) {
-	if _, exists := ls.inner[key]; !exists {
-		return nil, errors.New("no such key")
-	}
-	if len(ls.inner[key]) == 0 {
-		return nil, errors.New("list is empty")
-	}
-
-	var start, end int
-	length := len(ls.inner[key])
-	if len(count) == 0 {
-		start, end = length-1, length
-	} else if len(count) == 1 {
-		start, end = length-count[0], length
-	} else if len(count) == 2 {
-		start, end = count[0], count[1]
-	} else {
-		return nil, errors.New("invalid count")
-	}
-
-	if start < 0 {
-		start = length + start
-	}
-	if end < 0 {
-		end = length + end + 1
-	}
-	if end > length {
-		end = length
-	}
-
-	if start > end {
-		return nil, errors.New("invalid range")
-	}
-
-	removed := ls.inner[key][start:end]
-	ls.inner[key] = append(ls.inner[key][:start], ls.inner[key][end:]...)
-
-	return removed, nil
+// DictionaryStorage хранит данные в формате словаря (ключ-значение)
+type DictionaryStorage struct {
+	inner map[string]map[string]interface{}
 }
 
-func (ls *ListStorage) LSET(key string, index int, element string) error {
-	if _, exists := ls.inner[key]; !exists {
-		return errors.New("no such key")
+// NewDictionaryStorage создает новое хранилище для словарей
+func NewDictionaryStorage() *DictionaryStorage {
+	return &DictionaryStorage{
+		inner: make(map[string]map[string]interface{}),
 	}
-	if index < 0 {
-		index += len(ls.inner[key])
-	}
-	if index < 0 || index >= len(ls.inner[key]) {
-		return errors.New("index out of range")
-	}
-
-	ls.inner[key][index] = element
-	return nil
 }
 
-func (ls *ListStorage) LGET(key string, index int) (string, error) {
-	if _, exists := ls.inner[key]; !exists {
-		return "", errors.New("no such key")
+// Set устанавливает значение для ключа в словаре
+func (ds *DictionaryStorage) Set(key, field string, value interface{}) {
+	if _, ok := ds.inner[key]; !ok {
+		ds.inner[key] = make(map[string]interface{})
 	}
-	if index < 0 {
-		index += len(ls.inner[key])
-	}
-	if index < 0 || index >= len(ls.inner[key]) {
-		return "", errors.New("index out of range")
-	}
-
-	return ls.inner[key][index], nil
+	ds.inner[key][field] = value
 }
 
-func (ls *ListStorage) SaveToDisk(filename string) error {
-	data, err := json.Marshal(ls.inner)
-	if err != nil {
-		return err
+// Get возвращает значение для ключа из словаря
+func (ds *DictionaryStorage) Get(key, field string) (interface{}, error) {
+	if _, ok := ds.inner[key]; !ok {
+		return nil, errors.New("key not found")
 	}
-	return ioutil.WriteFile(filename, data, 0644)
-}
-
-func (ls *ListStorage) LoadFromDisk(filename string) error {
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return err
+	value, ok := ds.inner[key][field]
+	if !ok {
+		return nil, errors.New("field not found")
 	}
-	return json.Unmarshal(data, &ls.inner)
+	return value, nil
 }
