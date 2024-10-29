@@ -12,11 +12,9 @@ import (
 )
 
 func TestServerHealth(t *testing.T) {
-	// Создаем новое хранилище для тестов
 	st, err := storage.NewStorage()
 	assert.NoError(t, err)
 
-	// Создаем сервер с хранилищем
 	s := New("localhost:8080", &st)
 	engine := s.newAPI()
 
@@ -30,11 +28,9 @@ func TestServerHealth(t *testing.T) {
 	})
 }
 func TestServerSetGetSring(t *testing.T) {
-	// Создаем новое хранилище для тестов
 	st, err := storage.NewStorage()
 	assert.NoError(t, err)
 
-	// Создаем сервер с хранилищем
 	s := New("localhost:8080", &st)
 	engine := s.newAPI()
 	t.Run("Set and Get String Value", func(t *testing.T) {
@@ -62,11 +58,9 @@ func TestServerSetGetSring(t *testing.T) {
 }
 
 func TestServerSetGetInt(t *testing.T) {
-	// Создаем новое хранилище для тестов
 	st, err := storage.NewStorage()
 	assert.NoError(t, err)
 
-	// Создаем сервер с хранилищем
 	s := New("localhost:8080", &st)
 	engine := s.newAPI()
 	t.Run("Set and Get Int Value", func(t *testing.T) {
@@ -94,11 +88,9 @@ func TestServerSetGetInt(t *testing.T) {
 }
 
 func TestServerSetGetBool(t *testing.T) {
-	// Создаем новое хранилище для тестов
 	st, err := storage.NewStorage()
 	assert.NoError(t, err)
 
-	// Создаем сервер с хранилищем
 	s := New("localhost:8080", &st)
 	engine := s.newAPI()
 	t.Run("Set and Get Bool Value", func(t *testing.T) {
@@ -126,11 +118,9 @@ func TestServerSetGetBool(t *testing.T) {
 }
 
 func TestServerSetGetFloat(t *testing.T) {
-	// Создаем новое хранилище для тестов
 	st, err := storage.NewStorage()
 	assert.NoError(t, err)
 
-	// Создаем сервер с хранилищем
 	s := New("localhost:8080", &st)
 	engine := s.newAPI()
 	t.Run("Set and Get Float Value", func(t *testing.T) {
@@ -158,11 +148,9 @@ func TestServerSetGetFloat(t *testing.T) {
 }
 
 func TestServerGetNone(t *testing.T) {
-	// Создаем новое хранилище для тестов
 	st, err := storage.NewStorage()
 	assert.NoError(t, err)
 
-	// Создаем сервер с хранилищем
 	s := New("localhost:8080", &st)
 	engine := s.newAPI()
 	t.Run("Get Non-Existing Key", func(t *testing.T) {
