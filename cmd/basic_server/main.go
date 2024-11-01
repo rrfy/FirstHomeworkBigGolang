@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	types "homework1/internal/pkg/basic_http"
 
@@ -12,11 +10,7 @@ import (
 )
 
 func main() {
-	serverPort, ok := os.LookupEnv("BASIC_SERVER_PORT")
-	if !ok {
-		fmt.Println("not port provided")
-		os.Exit(1)
-	}
+	serverPort := "8080"
 
 	engine := gin.New()
 
